@@ -1,6 +1,8 @@
 from mongokit import Connection, Document
 import os
+
 import yaml
+from datetime import datetime
 
 with open(os.path.expanduser('~') + "/xian/config.yml", 'r') as config_file:
     cfg = yaml.load(config_file)
@@ -18,5 +20,10 @@ class City(Document):
         'country': unicode,
         'population': int,
         'alternate_names': [unicode],
-        'coordinates': [int]
+        'coordinates': [float],
+        'story': {
+            'content': unicode,
+            'updated': datetime,
+            'existing': bool
+        }
     }
