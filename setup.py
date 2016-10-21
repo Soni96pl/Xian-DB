@@ -39,7 +39,7 @@ setup(
     keywords='xian database db',
     py_modules=['xiandb'],
 
-    install_requires=['mongokit'],
+    install_requires=['mongokit', 'pymongo==2.9'],
     extras_require={},
 
     data_files=[
