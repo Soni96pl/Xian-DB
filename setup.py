@@ -9,7 +9,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='xiandb',
-    version='0.1.0',
+    version='0.1.1',
 
     description='A database model for Xian',
     long_description=long_description,
@@ -39,7 +39,7 @@ setup(
     keywords='xian database db',
     py_modules=['xiandb'],
 
-    install_requires=['mongokit', 'pyyaml', 'pymongo==2.9'],
+    install_requires=['mongokat', 'pyyaml'],
     extras_require={},
 
     data_files=[

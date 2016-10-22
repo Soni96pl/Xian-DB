@@ -11,7 +11,7 @@ place in a simple way.
 What are the technologies used?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The database package is dependent on MongoKit.
+The database package is dependent on MongoKat.
 
 How can I configure it?
 ^^^^^^^^^^^^^^^^^^^^^^^

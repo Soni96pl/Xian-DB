@@ -1,4 +1,5 @@
-from mongokit import Connection, Document
+from mongokat import Collection, Document
+from pymongo import MongoClient
 import os
 
 import yaml
@@ -7,14 +8,11 @@ from datetime import datetime
 with open(os.path.expanduser('~') + "/xian/config.yml", 'r') as config_file:
     cfg = yaml.load(config_file)
 
-connection = Connection(cfg['mongodb']['host'], cfg['mongodb']['port'])
+client = MongoClient(host=cfg['mongodb']['host'], port=cfg['mongodb']['port'])
 database = cfg['mongodb']['database']
 
 
-@connection.register
-class City(Document):
-    __collection__ = 'cities'
-    __database__ = database
+class CityDocument(Document):
     structure = {
         'name': unicode,
         'country': unicode,
@@ -27,3 +25,12 @@ class City(Document):
             'existing': bool
         }
     }
+
+
+class CityCollection(Collection):
+    __collection__ = 'cities'
+    __database__ = database
+    document_class = CityDocument
+
+
+City = CityCollection(client=client)
