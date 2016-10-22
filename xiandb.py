@@ -5,8 +5,12 @@ import os
 import yaml
 from datetime import datetime
 
-with open(os.path.expanduser('~') + "/xian/config.yml", 'r') as config_file:
-    cfg = yaml.load(config_file)
+try:
+    with open(os.path.expanduser('~') + '/xian/config.yml', 'r') as config_file:
+        cfg = yaml.load(config_file)
+except IOError:
+    print "Couldn't find a valid configuration file in ~/xian/config.xml"
+    print "Please refer to README.rst"
 
 client = MongoClient(host=cfg['mongodb']['host'], port=cfg['mongodb']['port'])
 database = cfg['mongodb']['database']

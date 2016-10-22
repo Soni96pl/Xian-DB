@@ -40,9 +40,5 @@ setup(
     py_modules=['xiandb'],
 
     install_requires=['mongokat', 'pyyaml'],
-    extras_require={},
-
-    data_files=[
-        (path.expanduser('~') + "/xian/", ['config.yml'])
-    ]
+    extras_require={}
 )
