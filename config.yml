@@ -1,6 +1,0 @@
-app:
-  root: http://localhost:5000
-mongodb:
-  host: localhost
-  port: 27017
-  database: xian
