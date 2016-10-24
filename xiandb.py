@@ -38,3 +38,20 @@ class CityCollection(Collection):
 
 
 City = CityCollection(client=client)
+
+
+class UserDocument(Document):
+    structure = {
+        'name': unicode,
+        'password': unicode,
+        'email': unicode
+    }
+
+
+class UserCollection(Collection):
+    __collection__ = 'users'
+    __database__ = database
+    document_class = UserDocument
+
+
+User = UserCollection(client=client)
