@@ -1,9 +1,11 @@
-from mongokat import Collection, Document
-from pymongo import MongoClient
 import os
 
 import yaml
+import bcrypt
 from datetime import datetime
+
+from mongokat import Collection, Document
+from pymongo import MongoClient
 
 try:
     with open(os.path.expanduser('~') + '/xian/config.yml', 'r') as cfg_file:
@@ -53,5 +55,16 @@ class UserCollection(Collection):
     __database__ = database
     document_class = UserDocument
 
+    def signup(self, name, password, email):
+        user = self.find_one({'$or': [{'name': name}, {'email': email}]})
+        if user:
+            return False
+
+        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        return self.insert_one({
+            'name': name,
+            'password': hashed,
+            'email': email
+        })
 
 User = UserCollection(client=client)
