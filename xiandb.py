@@ -16,6 +16,7 @@ except IOError:
 
 client = MongoClient(host=cfg['mongodb']['host'], port=cfg['mongodb']['port'])
 database = cfg['mongodb']['database']
+system_js = getattr(client, database).system_js
 
 
 class CityDocument(Document):
@@ -46,14 +47,30 @@ class UserDocument(Document):
     structure = {
         'name': unicode,
         'password': unicode,
-        'email': unicode
+        'email': unicode,
+        'favorites': [int]
     }
+
+    def add_favorite(self, city_id):
+        if city_id not in self['favorites']:
+            self['favorites'].append(city_id)
+            return True
+        return False
+
+    def remove_favorite(self, city_id):
+        if city_id in self['favorites']:
+            self['favorites'].remove(city_id)
+            return True
+        return False
 
 
 class UserCollection(Collection):
     __collection__ = 'users'
     __database__ = database
     document_class = UserDocument
+
+    def get(self, _id):
+        return self.find_one({'_id': _id})
 
     def signup(self, name, password, email):
         user = self.find_one({'$or': [{'name': name}, {'email': email}]})
@@ -62,9 +79,24 @@ class UserCollection(Collection):
 
         hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         return self.insert_one({
+            '_id': system_js.getNextSequence('userid'),
             'name': name,
             'password': hashed,
-            'email': email
+            'email': email,
+            'favorites': []
         })
+
+    def authenticate(self, name, password):
+        user = self.find_one({'name': name})
+        if not user:
+            return False
+
+        password = password.encode('utf-8')
+        hashed = user['password'].encode('utf-8')
+        if not bcrypt.hashpw(password, hashed):
+            return False
+
+        return user
+
 
 User = UserCollection(client=client)
