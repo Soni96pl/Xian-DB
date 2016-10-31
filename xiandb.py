@@ -32,16 +32,8 @@ class Collection(Collection):
         super(Collection, self).__init__(**kwargs)
         self.fields = self.document_class.structure.keys()
 
-    def get(self, _id, fields=None):
-        if fields:
-            self.fields = fields
-
-        fields_system = ['_id' if f == 'id' else f for f in self.fields]
-        project = dict(zip(fields_system, [1 for x in fields_system]))
-        document = self.find_one({'_id': _id}, project)
-        document.fields = self.fields
-
-        return self.find_one({'_id': _id}, project)
+    def get(self, _id):
+        return self.find_one({'_id': _id})
 
 
 class CityDocument(Document):
