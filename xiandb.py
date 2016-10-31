@@ -3,8 +3,10 @@ import os
 import yaml
 import bcrypt
 from datetime import datetime
+from collections import OrderedDict
 
 from mongokat import Collection, Document
+import pymongo
 from pymongo import MongoClient
 
 try:
@@ -17,6 +19,29 @@ except IOError:
 client = MongoClient(host=cfg['mongodb']['host'], port=cfg['mongodb']['port'])
 database = cfg['mongodb']['database']
 system_js = getattr(client, database).system_js
+
+
+class Document(Document):
+    def __init__(self, **kwargs):
+        super(Document, self).__init__(**kwargs)
+        self.fields = self.structure.keys()
+
+
+class Collection(Collection):
+    def __init__(self, **kwargs):
+        super(Collection, self).__init__(**kwargs)
+        self.fields = self.document_class.structure.keys()
+
+    def get(self, _id, fields=None):
+        if fields:
+            self.fields = fields
+
+        fields_system = ['_id' if f == 'id' else f for f in self.fields]
+        project = dict(zip(fields_system, [1 for x in fields_system]))
+        document = self.find_one({'_id': _id}, project)
+        document.fields = self.fields
+
+        return self.find_one({'_id': _id}, project)
 
 
 class CityDocument(Document):
@@ -38,6 +63,30 @@ class CityCollection(Collection):
     __collection__ = 'cities'
     __database__ = database
     document_class = CityDocument
+
+    def search(self, _id=None, name=None, fields=None, sort=[]):
+        if not fields:
+            fields = self.document_class.structure.keys()
+
+        project = dict(zip(fields, [1 for x in fields]))
+
+        query = [
+            {'$match': None},
+            {'$project': project}
+        ]
+
+        if _id:
+            query[0]['$match'] = {'_id': _id}
+        else:
+            query[0]['$match'] = {'$or': [
+                {'name': name},
+                {'alternate_names': name.lower()}
+            ]}
+            query[1]['$project']['nameMatch'] = {'$eq': ['$name', name]}
+            sort.insert(0, ('nameMatch', pymongo.DESCENDING))
+
+        query.append({'$sort': OrderedDict(sort)})
+        return self.aggregate(query)
 
 
 City = CityCollection(client=client)
@@ -69,10 +118,19 @@ class UserCollection(Collection):
     __database__ = database
     document_class = UserDocument
 
-    def get(self, _id):
-        return self.find_one({'_id': _id})
+    def authenticate(self, name, password):
+        user = self.find_one({'name': name})
+        if not user:
+            return False
 
-    def signup(self, name, password, email):
+        password = password.encode('utf-8')
+        hashed = user['password'].encode('utf-8')
+        if not bcrypt.hashpw(password, hashed):
+            return False
+
+        return user
+
+    def add(self, name, password, email):
         user = self.find_one({'$or': [{'name': name}, {'email': email}]})
         if user:
             return False
@@ -85,18 +143,6 @@ class UserCollection(Collection):
             'email': email,
             'favorites': []
         })
-
-    def authenticate(self, name, password):
-        user = self.find_one({'name': name})
-        if not user:
-            return False
-
-        password = password.encode('utf-8')
-        hashed = user['password'].encode('utf-8')
-        if not bcrypt.hashpw(password, hashed):
-            return False
-
-        return user
 
 
 User = UserCollection(client=client)
