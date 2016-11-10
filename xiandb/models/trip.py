@@ -22,6 +22,7 @@ class TripDocument(Document):
             'price': int
         }]
     }
+    unique = ['name']
 
     def get_segment(self, _id):
         try:
@@ -68,22 +69,3 @@ class TripCollection(Collection):
     __collection__ = 'trips'
     __database__ = config.mongodb['database']
     document_class = TripDocument
-
-    def add(self, trip):
-        existing = self.find_one({'name': trip['name']})
-        if existing:
-            return False
-
-        trip['_id'] = self.increment()
-        for key, value in self.document_class.structure.items():
-            if key in trip:
-                continue
-
-            if type(value) is dict:
-                trip[key] = dict()
-            elif type(value) is list:
-                trip[key] = list()
-            else:
-                trip[key] = None
-
-        return self.insert_one(trip).inserted_id

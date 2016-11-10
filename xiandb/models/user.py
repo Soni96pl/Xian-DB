@@ -13,6 +13,7 @@ class UserDocument(Document):
         'email': unicode,
         'favorites': [int]
     }
+    unique = ['name', 'email']
 
     def add_favorite(self, city_id):
         if city_id not in self['favorites']:
@@ -44,16 +45,12 @@ class UserCollection(Collection):
 
         return user
 
-    def add(self, name, password, email):
-        user = self.find_one({'$or': [{'name': name}, {'email': email}]})
-        if user:
+    def add(self, user):
+        user = self.prepare_document(user)
+        if not user:
             return False
 
-        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-        return self.insert_one({
-            '_id': self.increment(),
-            'name': name,
-            'password': hashed,
-            'email': email,
-            'favorites': []
-        })
+        user['password'] = bcrypt.hashpw(user['password'].encode('utf-8'),
+                                         bcrypt.gensalt())
+
+        return self.insert_one(user).inserted_id
