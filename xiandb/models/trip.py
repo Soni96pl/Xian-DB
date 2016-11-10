@@ -31,35 +31,34 @@ class TripDocument(Document):
 
     def add_segment(self, segment):
         # Check for a conflicting segment on the same trip
-        assert len(filter(lambda e: any([e['departure'] < segment['arrival'],
-                                         e['arrival'] > segment['departure']]),
-                          self['segments'])) is 0
+        if len(filter(lambda e: any([e['departure'] < segment['arrival'],
+                                     e['arrival'] > segment['departure']]),
+                      self['segments'])) > 0:
+            return False
 
         segment['_id'] = int(self.collection.system_js.getNextSequence('segmentsid'))
 
         self['segments'].append(segment)
-        self.save()
         return segment['_id']
 
     def update_segment(self, segment):
         # Check for a conflicting segment on the same trip
-        assert len(filter(lambda e: all([
+        if len(filter(lambda e: all([
             e['_id'] != segment['_id'],
             any([e['departure'] < segment['arrival'],
                  e['arrival'] > segment['departure']])
-        ]), self['segments'])) is 0
+        ]), self['segments'])) > 0:
+            return False
 
         self['segments'] = [update_dictionary(existing, segment) for existing
                             in self['segments']]
-        self.save()
-        return segment['_id']
+        return True
 
     def remove_segment(self, segment_id):
         segment = self.get_segment(segment_id)
         if segment:
             self['segments'] = filter(lambda s: s['_id'] != segment_id,
                                       self['segments'])
-            self.save()
             return True
         return False
 
@@ -69,15 +68,10 @@ class TripCollection(Collection):
     __database__ = config.mongodb['database']
     document_class = TripDocument
 
-    def add(self, user_id, name, date):
-        trip = self.find_one({'name': name})
+    def add(self, trip):
+        trip = self.find_one({'name': trip['name']})
         if trip:
             return False
 
-        return self.insert_one({
-            '_id': self.increment(),
-            'user_id': user_id,
-            'name': name,
-            'date': date,
-            'segments': []
-        })
+        trip['_id'] = self.increment()
+        return self.insert_one(trip).inserted_id
