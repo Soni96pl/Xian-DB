@@ -36,20 +36,21 @@ class TripDocument(Document):
                       self['segments'])) > 0:
             return False
 
-        segment['_id'] = int(self.collection.system_js.getNextSequence('segmentsid'))
+        segment['_id'] = int(self.mongokat_collection.system_js.getNextSequence('segmentsid'))
 
         self['segments'].append(segment)
         return segment['_id']
 
-    def update_segment(self, segment):
+    def update_segment(self, segment_id, segment):
         # Check for a conflicting segment on the same trip
         if len(filter(lambda e: all([
-            e['_id'] != segment['_id'],
+            e['_id'] != segment_id,
             any([e['departure'] < segment['arrival'],
                  e['arrival'] > segment['departure']])
         ]), self['segments'])) > 0:
             return False
 
+        segment['_id'] = segment_id
         self['segments'] = [update_dictionary(existing, segment) for existing
                             in self['segments']]
         return True
@@ -69,9 +70,20 @@ class TripCollection(Collection):
     document_class = TripDocument
 
     def add(self, trip):
-        trip = self.find_one({'name': trip['name']})
-        if trip:
+        existing = self.find_one({'name': trip['name']})
+        if existing:
             return False
 
         trip['_id'] = self.increment()
+        for key, value in self.document_class.structure.items():
+            if key in trip:
+                continue
+
+            if type(value) is dict:
+                trip[key] = dict()
+            elif type(value) is list:
+                trip[key] = list()
+            else:
+                trip[key] = None
+
         return self.insert_one(trip).inserted_id

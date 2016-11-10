@@ -13,10 +13,10 @@ class Collection(Collection):
         return self.find_one({'_id': _id})
 
     def update(self, _id, fields):
-        return self.update_one({'_id': _id}, {"$set": fields})
+        return self.update_one({'_id': _id}, {"$set": fields}).acknowledged
 
     def delete(self, _id):
-        if self.delete_one({'_id': _id}).deleted_count == 1:
+        if self.delete_one({'_id': _id}).deleted_count > 0:
             return True
         return False
 
