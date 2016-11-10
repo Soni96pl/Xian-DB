@@ -9,7 +9,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='xiandb',
-    version='0.1.5',
+    version='0.1.6',
 
     description='A database model for Xian',
     long_description=long_description,
