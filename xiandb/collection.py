@@ -12,28 +12,6 @@ class Collection(Collection):
     def get(self, _id):
         return self.find_one(_id)
 
-    def add(self, fields):
-        document = self.prepare_document(fields)
-        if not document:
-            return False
-
-        return self.insert_one(document).inserted_id
-
-    def update(self, _id, fields):
-        if not self.is_unique(fields, _id):
-            return False
-
-        return self.update_one({'_id': _id}, {"$set": fields}).acknowledged
-
-    def delete(self, _id):
-        if self.delete_one({'_id': _id}).deleted_count > 0:
-            return True
-        return False
-
-    def increment(self):
-        counter_name = self.__collection__ + 'id'
-        return int(self.system_js.getNextSequence(counter_name))
-
     def search(self, _id=None, fields=None, sort=[]):
         if not fields:
             fields = self.document_class.structure.keys()
@@ -55,6 +33,15 @@ class Collection(Collection):
         query.append({'$sort': OrderedDict(sort)})
         return self.aggregate(query)
 
+    def delete(self, _id):
+        if self.delete_one({'_id': _id}).deleted_count > 0:
+            return True
+        return False
+
+    def increment(self):
+        counter_name = self.__collection__ + 'id'
+        return int(self.system_js.getNextSequence(counter_name))
+
     def is_unique(self, fields, _id=None):
         query = [
             {field: fields[field]} for field in self.document_class.unique
@@ -68,11 +55,20 @@ class Collection(Collection):
 
         return True
 
+    def preprocess_field(self, field):
+        name, value = field
+        try:
+            return (name, self.document_class.preprocessors[name](value))
+        except KeyError:
+            return (name, value)
+
     def prepare_document(self, fields):
         if not self.is_unique(fields):
             return False
 
         fields['_id'] = self.increment()
+        fields = dict(map(self.preprocess_field, fields.items()))
+
         for key, value in self.document_class.structure.items():
             if key in fields:
                 continue
@@ -85,3 +81,16 @@ class Collection(Collection):
                 fields[key] = None
 
         return fields
+
+    def add(self, fields):
+        document = self.prepare_document(fields)
+        if not document:
+            return False
+
+        return self.insert_one(document).inserted_id
+
+    def update(self, _id, fields):
+        if not self.is_unique(fields, _id):
+            return False
+
+        return self.update_one({'_id': _id}, {"$set": fields}).acknowledged

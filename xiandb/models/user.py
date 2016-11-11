@@ -13,6 +13,9 @@ class UserDocument(Document):
         'email': unicode,
         'favorites': [int]
     }
+    preprocessors = {
+        'password': lambda p: unicode(bcrypt.hashpw(p, bcrypt.gensalt()))
+    }
     unique = ['name', 'email']
 
     def add_favorite(self, city_id):
@@ -44,13 +47,3 @@ class UserCollection(Collection):
             return False
 
         return user
-
-    def add(self, user):
-        user = self.prepare_document(user)
-        if not user:
-            return False
-
-        user['password'] = bcrypt.hashpw(user['password'].encode('utf-8'),
-                                         bcrypt.gensalt())
-
-        return self.insert_one(user).inserted_id
