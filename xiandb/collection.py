@@ -63,9 +63,6 @@ class Collection(Collection):
             return (name, value)
 
     def prepare_document(self, fields):
-        if not self.is_unique(fields):
-            return False
-
         fields['_id'] = self.increment()
         fields = dict(map(self.preprocess_field, fields.items()))
 
@@ -83,10 +80,10 @@ class Collection(Collection):
         return fields
 
     def add(self, fields):
-        document = self.prepare_document(fields)
-        if not document:
+        if not self.is_unique(fields):
             return False
 
+        document = self.prepare_document(fields)
         return self.insert_one(document).inserted_id
 
     def update(self, _id, fields):
@@ -94,3 +91,10 @@ class Collection(Collection):
             return False
 
         return self.update_one({'_id': _id}, {"$set": fields}).acknowledged
+
+    def upsert(self, fields, _id=None):
+        if not _id:
+            return self.add(fields)
+        elif self.update(_id, fields):
+            return _id
+        return False
