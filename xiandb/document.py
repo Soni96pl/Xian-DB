@@ -3,6 +3,7 @@ from mongokat import Document
 
 class Document(Document):
     unique = []
+    preprocessors = {}
 
     def __init__(self, **kwargs):
         super(Document, self).__init__(**kwargs)
