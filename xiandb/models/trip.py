@@ -3,7 +3,6 @@ from datetime import date, datetime
 from xiandb import config
 from xiandb.document import Document
 from xiandb.collection import Collection
-from xiandb.tools import update_dictionary
 
 
 class TripDocument(Document):
@@ -24,45 +23,21 @@ class TripDocument(Document):
     }
     unique = ['name']
 
-    def get_segment(self, _id):
-        try:
-            return filter(lambda s: s['_id'] == _id, self['segments'])[0]
-        except IndexError:
-            return None
-
-    def add_segment(self, segment):
-        # Check for a conflicting segment on the same trip
-        if len(filter(lambda e: any([e['departure'] < segment['arrival'],
-                                     e['arrival'] > segment['departure']]),
-                      self['segments'])) > 0:
-            return False
-
-        segment['_id'] = int(self.mongokat_collection.system_js.getNextSequence('segmentsid'))
-
-        self['segments'].append(segment)
-        return segment['_id']
-
-    def update_segment(self, segment_id, segment):
-        # Check for a conflicting segment on the same trip
-        if len(filter(lambda e: all([
-            e['_id'] != segment_id,
-            any([e['departure'] < segment['arrival'],
-                 e['arrival'] > segment['departure']])
-        ]), self['segments'])) > 0:
-            return False
-
-        segment['_id'] = segment_id
-        self['segments'] = [update_dictionary(existing, segment) for existing
-                            in self['segments']]
-        return True
-
-    def remove_segment(self, segment_id):
-        segment = self.get_segment(segment_id)
-        if segment:
-            self['segments'] = filter(lambda s: s['_id'] != segment_id,
-                                      self['segments'])
-            return True
-        return False
+    def __init__(self, **kwargs):
+        super(Document, self).__init__(**kwargs)
+        self.validators['segments'] = [
+            lambda f: f['departure'] < f['arrival'],
+            lambda f: not any(map(
+                lambda e: any([
+                    '_id' in f and f['_id'] != e['_id'],
+                    not all([
+                        f['departure'] < e['arrival'],
+                        f['arrival'] > e['departure']
+                    ])
+                ]),
+                self['segments']
+            ))
+        ]
 
 
 class TripCollection(Collection):
