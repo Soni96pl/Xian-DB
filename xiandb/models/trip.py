@@ -10,7 +10,7 @@ class TripDocument(Document):
         'user_id': int,
         'name': unicode,
         'date': date,
-        'segments': [{
+        'transport': [{
             '_id': int,
             'origin_id': int,
             'destination_id': int,
@@ -25,7 +25,7 @@ class TripDocument(Document):
 
     def __init__(self, **kwargs):
         super(Document, self).__init__(**kwargs)
-        self.validators['segments'] = [
+        self.validators['transport'] = [
             lambda f: f['departure'] < f['arrival'],
             lambda f: not any(map(
                 lambda e: any([
@@ -35,7 +35,7 @@ class TripDocument(Document):
                         f['arrival'] > e['departure']
                     ])
                 ]),
-                self['segments']
+                self['transport']
             ))
         ]
 
