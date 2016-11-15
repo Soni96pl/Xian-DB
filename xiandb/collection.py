@@ -92,9 +92,9 @@ class Collection(Collection):
 
         return self.update_one({'_id': _id}, {"$set": fields}).acknowledged
 
-    def upsert(self, fields, _id=None):
-        if not _id:
+    def upsert(self, fields):
+        if '_id' in fields:
             return self.add(fields)
-        elif self.update(_id, fields):
-            return _id
+        elif self.update(fields['_id'], fields):
+            return fields['_id']
         return False
