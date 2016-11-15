@@ -14,11 +14,25 @@ class TripDocument(Document):
             '_id': int,
             'origin_id': int,
             'destination_id': int,
-            'departure': datetime,
-            'arrival': datetime,
-            'mode': int,
-            'carrier': unicode,
-            'price': int
+            'carrier_id': int,
+            'departure': {
+                'station_id': int,
+                'time': datetime
+            },
+            'arrival': {
+                'station_id': int,
+                'time': datetime,
+            },
+            'mode': unicode,
+            'price': {
+                'value': float,
+                'currency': unicode
+            },
+            'booking': {
+                'ref': unicode,
+                'url': unicode
+            },
+            'conditions': unicode
         }]
     }
     unique = ['name']
