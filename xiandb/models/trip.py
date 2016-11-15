@@ -12,9 +12,9 @@ class TripDocument(Document):
         'date': date,
         'transport': [{
             '_id': int,
-            'origin_id': int,
-            'destination_id': int,
             'carrier_id': int,
+            'code': unicode,
+            'mode': unicode,
             'departure': {
                 'station_id': int,
                 'time': datetime
@@ -23,7 +23,6 @@ class TripDocument(Document):
                 'station_id': int,
                 'time': datetime,
             },
-            'mode': unicode,
             'price': {
                 'value': float,
                 'currency': unicode
