@@ -1,5 +1,3 @@
-from datetime import date, datetime
-
 from xiandb import config
 from xiandb.document import Document
 from xiandb.collection import Collection
@@ -7,7 +5,9 @@ from xiandb.collection import Collection
 
 class StationDocument(Document):
     structure = {
+        '_id': int,
         'name': unicode,
+        'code': unicode,
         'type': unicode,
         'city_id': int,
         'location': {
@@ -19,8 +19,9 @@ class StationDocument(Document):
             'phone': unicode,
             'email': unicode
         },
-        'transfer': [int],
-        'carriers': [int]
+        'status': unicode,
+        'contributor': int,
+        'transfer': [int]
     }
     unique = ['name']
 

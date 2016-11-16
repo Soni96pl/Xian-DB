@@ -10,6 +10,7 @@ from xiandb.collection import Collection
 
 class CityDocument(Document):
     structure = {
+        '_id': int,
         'name': unicode,
         'country': unicode,
         'population': int,

@@ -1,3 +1,4 @@
+from bson.dbref import DBRef
 from mongokat import Document
 
 
@@ -10,13 +11,33 @@ class Document(Document):
         super(Document, self).__init__(**kwargs)
         self.fields = self.structure.keys()
 
-    def dict(self, fields=None):
+    def filter_fields(self, fields=None):
         if not fields:
             fields = self.fields
 
         fields.append('_id')
 
         return dict(zip(fields, [self[f] for f in fields]))
+
+    def as_dict(self, fields=None):
+        if not fields:
+            fields = self.fields
+
+        fields = list(set(fields))
+        document = dict(zip(fields, [self[f] for f in fields]))
+
+        def dereference_level(level):
+            if isinstance(level, DBRef):
+                return self.mongokat_collection.database.dereference(level)
+            elif type(level) is dict:
+                return dict(zip(level.keys(),
+                                map(dereference_level, level.values())))
+            elif type(level) is list:
+                return map(dereference_level, level)
+            else:
+                return level
+
+        return dereference_level(document)
 
     def get_sub(self, name, _id):
         try:

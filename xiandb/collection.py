@@ -1,5 +1,7 @@
 from collections import OrderedDict
+from inspect import isclass
 
+from bson.dbref import DBRef
 from mongokat import Collection
 
 
@@ -55,29 +57,61 @@ class Collection(Collection):
 
         return True
 
-    def preprocess_field(self, field):
-        name, value = field
-        try:
-            return (name, self.document_class.preprocessors[name](value))
-        except KeyError:
-            return (name, value)
+    def preprocess_fields(self, fields):
+        def preprocess_level(preprocessor, f):
+            name, value = f
+            try:
+                p = preprocessor[name]
+                if type(value) is dict:
+                    return (name, dict(map(lambda f: preprocess_level(p, f),
+                                           value.items())))
+                elif type(value) is list:
+                    return (name, map(lambda f: preprocess_level(p, f),
+                                      value))
+                else:
+                    return (name, p(value))
+            except KeyError:
+                return (name, value)
+
+        return dict(map(
+            lambda f: preprocess_level(self.document_class.preprocessors, f),
+            fields.items()
+        ))
 
     def prepare_document(self, fields):
         fields['_id'] = self.increment()
-        fields = dict(map(self.preprocess_field, fields.items()))
+        fields = self.preprocess_fields(fields)
 
-        for key, value in self.document_class.structure.items():
-            if key in fields:
-                continue
+        def merge_dictionary(structure, fields):
+            items = []
 
-            if type(value) is dict:
-                fields[key] = dict()
-            elif type(value) is list:
-                fields[key] = list()
-            else:
-                fields[key] = None
+            for name, value in structure.items():
+                if name not in fields:
+                    if type(value) in [dict, Collection]:
+                        fields[name] = {}
+                    elif type(value) is list:
+                        fields[name] = []
+                    else:
+                        fields[name] = None
 
-        return fields
+                items.append((name, merge_structure(value, fields[name])))
+            return dict(items)
+
+        def merge_structure(structure, fields):
+            if type(structure) is dict:
+                return merge_dictionary(structure, fields)
+            elif type(structure) is list:
+                return [merge_structure(structure[0], f) for f in fields]
+            elif isclass(structure) and issubclass(structure, Collection):
+                collection = structure(client=self.client)
+                _id = collection.upsert(fields)
+                if not _id:
+                    return False
+
+                return DBRef(structure.__collection__, _id)
+            return fields
+
+        return merge_structure(self.document_class.structure, fields)
 
     def add(self, fields):
         if not self.is_unique(fields):

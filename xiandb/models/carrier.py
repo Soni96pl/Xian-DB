@@ -1,5 +1,3 @@
-from datetime import date, datetime
-
 from xiandb import config
 from xiandb.document import Document
 from xiandb.collection import Collection
@@ -7,13 +5,15 @@ from xiandb.collection import Collection
 
 class CarrierDocument(Document):
     structure = {
+        '_id': int,
         'name': unicode,
         'type': unicode,
         'contact': {
             'phone': unicode,
             'email': unicode
         },
-        'stations': [int]
+        'status': unicode,
+        'contributor': int
     }
     unique = ['name']
 

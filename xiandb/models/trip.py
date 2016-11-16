@@ -3,24 +3,26 @@ from datetime import date, datetime
 from xiandb import config
 from xiandb.document import Document
 from xiandb.collection import Collection
+from xiandb.models import carrier, station
 
 
 class TripDocument(Document):
     structure = {
+        '_id': int,
         'user_id': int,
         'name': unicode,
         'date': date,
         'transport': [{
             '_id': int,
-            'carrier_id': int,
+            'carrier': carrier.CarrierCollection,
             'code': unicode,
             'mode': unicode,
             'departure': {
-                'station_id': int,
+                'station': station.StationCollection,
                 'time': datetime
             },
             'arrival': {
-                'station_id': int,
+                'station': station.StationCollection,
                 'time': datetime,
             },
             'price': {
