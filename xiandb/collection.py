@@ -54,7 +54,7 @@ class Collection(Collection):
         return int(self.database.system_js.getNextSequence(counter))
 
     def prepare_document(self, fields):
-        def merge_dictionary(structure, fields):
+        def break_dictionary(structure, fields):
             items = []
 
             for name, field in structure.items():
@@ -67,24 +67,24 @@ class Collection(Collection):
                 else:
                     raise ValueError("Field is of incorrect type")
 
-                items.append((name, merge_structure(field, fields[name])))
+                items.append((name, create_fields(field, fields[name])))
             return dict(items)
 
-        def merge_list(structure, fields):
+        def break_list(structure, fields):
             field = structure[0]
-            return [merge_structure(field, value) for value in fields]
+            return [create_fields(field, value) for value in fields]
 
-        def merge_structure(structure, fields):
+        def create_fields(structure, fields):
             if type(structure) is dict:
-                return merge_dictionary(structure, fields)
+                return break_dictionary(structure, fields)
             elif type(structure) is list:
-                return merge_list(structure, fields)
+                return break_list(structure, fields)
 
             field = structure
             value = fields
             return field.oncreate(value)
 
-        return merge_structure(self.document_class.structure, fields)
+        return create_fields(self.document_class.structure, fields)
 
     def add(self, fields):
         document = self.prepare_document(fields)
