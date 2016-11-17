@@ -3,32 +3,21 @@ from mongokat import Document
 
 
 class Document(Document):
-    unique = []
-    validators = {'self': []}
-    preprocessors = {}
-
     def __init__(self, **kwargs):
         super(Document, self).__init__(**kwargs)
-        self.fields = self.structure.keys()
-
-    def filter_fields(self, fields=None):
-        if not fields:
-            fields = self.fields
-
-        fields.append('_id')
-
-        return dict(zip(fields, [self[f] for f in fields]))
+        self.database = self.mongokat_collection.database
+        self.client = self.mongokat_collection.client
 
     def as_dict(self, fields=None):
         if not fields:
-            fields = self.fields
+            fields = self.structure.keys()
 
         fields = list(set(fields))
-        document = dict(zip(fields, [self[f] for f in fields]))
+        document = dict(zip(fields, [self[f] for f in set(fields)]))
 
         def dereference_level(level):
             if isinstance(level, DBRef):
-                return self.mongokat_collection.database.dereference(level)
+                return self.database.dereference(level)
             elif type(level) is dict:
                 return dict(zip(level.keys(),
                                 map(dereference_level, level.values())))
@@ -47,24 +36,15 @@ class Document(Document):
 
     def increment_sub(self, name):
         counter_name = name + 'id'
-        return int(self.mongokat_collection.system_js.getNextSequence(counter_name))
-
-    def validate_sub(self, name, fields):
-        return all([v(fields) for v in self.validators[name]])
+        return int(self.database.system_js.getNextSequence(counter_name))
 
     def add_sub(self, name, fields):
-        if not self.validate_sub(name, fields):
-            return False
-
         fields['_id'] = self.increment_sub(name)
         self[name].append(fields)
         return fields['_id']
 
     def update_sub(self, name, _id, fields):
         fields['_id'] = _id
-        if not self.validate_sub(name, fields):
-            return False
-
         self[name] = [e if e['_id'] is not fields['_id'] else fields
                       for e in self[name]]
         return True

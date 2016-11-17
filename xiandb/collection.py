@@ -1,15 +1,24 @@
 from collections import OrderedDict
 from inspect import isclass
 
-from bson.dbref import DBRef
 from mongokat import Collection
+
+from xiandb.field import Field
 
 
 class Collection(Collection):
     def __init__(self, **kwargs):
         super(Collection, self).__init__(**kwargs)
-        self.fields = self.document_class.structure.keys()
-        self.system_js = self.database.system_js
+        self.register_fields(self.document_class.structure.keys(),
+                             self.document_class.structure.values())
+
+    def register_fields(self, name, fields):
+        if isinstance(fields, Field):
+            fields.register(name, self)
+        elif type(fields) is list:
+            map(self.register_fields, name, fields)
+        elif type(fields) is dict:
+            map(self.register_fields, fields.keys(), fields.values())
 
     def get(self, _id):
         return self.find_one(_id)
@@ -41,89 +50,48 @@ class Collection(Collection):
         return False
 
     def increment(self):
-        counter_name = self.__collection__ + 'id'
-        return int(self.system_js.getNextSequence(counter_name))
-
-    def is_unique(self, fields, _id=None):
-        query = [
-            {field: fields[field]} for field in self.document_class.unique
-        ]
-
-        if _id:
-            query.append({'$ne': {'_id': _id}})
-
-        if self.find_one(query):
-            return False
-
-        return True
-
-    def preprocess_fields(self, fields):
-        def preprocess_level(preprocessor, f):
-            name, value = f
-            try:
-                p = preprocessor[name]
-                if type(value) is dict:
-                    return (name, dict(map(lambda f: preprocess_level(p, f),
-                                           value.items())))
-                elif type(value) is list:
-                    return (name, map(lambda f: preprocess_level(p, f),
-                                      value))
-                else:
-                    return (name, p(value))
-            except KeyError:
-                return (name, value)
-
-        return dict(map(
-            lambda f: preprocess_level(self.document_class.preprocessors, f),
-            fields.items()
-        ))
+        counter = self.__collection__ + 'id'
+        return int(self.database.system_js.getNextSequence(counter))
 
     def prepare_document(self, fields):
-        fields['_id'] = self.increment()
-        fields = self.preprocess_fields(fields)
-
         def merge_dictionary(structure, fields):
             items = []
 
-            for name, value in structure.items():
-                if name not in fields:
-                    if type(value) in [dict, Collection]:
-                        fields[name] = {}
-                    elif type(value) is list:
-                        fields[name] = []
-                    else:
-                        fields[name] = None
+            for name, field in structure.items():
+                if isinstance(field, Field):
+                    fields[name] = fields.get(name, None)
+                elif type(field) is dict:
+                    fields[name] = fields.get(name, {})
+                elif type(field) is list:
+                    fields[name] = fields.get(name, [])
+                else:
+                    raise ValueError("Field is of incorrect type")
 
-                items.append((name, merge_structure(value, fields[name])))
+                items.append((name, merge_structure(field, fields[name])))
             return dict(items)
+
+        def merge_list(structure, fields):
+            field = structure[0]
+            return [merge_structure(field, value) for value in fields]
 
         def merge_structure(structure, fields):
             if type(structure) is dict:
                 return merge_dictionary(structure, fields)
             elif type(structure) is list:
-                return [merge_structure(structure[0], f) for f in fields]
-            elif isclass(structure) and issubclass(structure, Collection):
-                collection = structure(client=self.client)
-                _id = collection.upsert(fields)
-                if not _id:
-                    return False
+                return merge_list(structure, fields)
 
-                return DBRef(structure.__collection__, _id)
-            return fields
+            field = structure
+            value = fields
+            return field.oncreate(value)
 
         return merge_structure(self.document_class.structure, fields)
 
     def add(self, fields):
-        if not self.is_unique(fields):
-            return False
-
         document = self.prepare_document(fields)
+        print document
         return self.insert_one(document).inserted_id
 
     def update(self, _id, fields):
-        if not self.is_unique(fields, _id):
-            return False
-
         return self.update_one({'_id': _id}, {"$set": fields}).acknowledged
 
     def upsert(self, fields):
