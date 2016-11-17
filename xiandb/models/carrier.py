@@ -1,21 +1,21 @@
 from xiandb import config
+from xiandb.field import Field, Id
 from xiandb.document import Document
 from xiandb.collection import Collection
 
 
 class CarrierDocument(Document):
     structure = {
-        '_id': int,
-        'name': unicode,
-        'type': unicode,
+        '_id': Id(),
+        'name': Field(unicode, required=True),
+        'type': Field(unicode),
         'contact': {
-            'phone': unicode,
-            'email': unicode
+            'phone': Field(unicode),
+            'email': Field(unicode)
         },
-        'status': unicode,
-        'contributor': int
+        'status': Field(unicode),
+        'contributor': Field(int)
     }
-    unique = ['name']
 
     def __init__(self, **kwargs):
         super(Document, self).__init__(**kwargs)

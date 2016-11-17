@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from xiandb import config
+from xiandb.field import Id, Reference, Field
 from xiandb.document import Document
 from xiandb.collection import Collection
 from xiandb.models import carrier, station
@@ -8,32 +9,32 @@ from xiandb.models import carrier, station
 
 class TripDocument(Document):
     structure = {
-        '_id': int,
-        'user_id': int,
-        'name': unicode,
-        'date': date,
+        '_id': Id(),
+        'user_id': Field(int, required=True),
+        'name': Field(unicode, required=True),
+        'date': Field(date, required=True),
         'transport': [{
-            '_id': int,
-            'carrier': carrier.CarrierCollection,
-            'code': unicode,
-            'mode': unicode,
+            '_id': Id(counter='transportid'),
+            'carrier': Reference(carrier.CarrierCollection),
+            'code': Field(unicode),
+            'mode': Field(unicode),
             'departure': {
-                'station': station.StationCollection,
-                'time': datetime
+                'station': Reference(station.StationCollection),
+                'time': Field(datetime)
             },
             'arrival': {
-                'station': station.StationCollection,
-                'time': datetime,
+                'station': Reference(station.StationCollection),
+                'time': Field(datetime),
             },
             'price': {
-                'value': float,
-                'currency': unicode
+                'value': Field(float),
+                'currency': Field(unicode)
             },
             'booking': {
-                'ref': unicode,
-                'url': unicode
+                'ref': Field(unicode),
+                'url': Field(unicode)
             },
-            'conditions': unicode
+            'conditions': Field(unicode)
         }]
     }
     unique = ['name']

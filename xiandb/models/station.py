@@ -1,29 +1,30 @@
 from xiandb import config
+from xiandb.field import Id, Field, Reference
 from xiandb.document import Document
 from xiandb.collection import Collection
+from xiandb.models import city
 
 
 class StationDocument(Document):
     structure = {
-        '_id': int,
-        'name': unicode,
-        'code': unicode,
-        'type': unicode,
-        'city_id': int,
+        '_id': Id(),
+        'name': Field(unicode, required=True, unique=True),
+        'code': Field(unicode),
+        'type': Field(unicode, required=True),
+        'city': Reference(city.CityCollection),
         'location': {
-            'address': unicode,
-            'coordinates': [float],
-            'instructions': unicode
+            'address': Field(unicode),
+            'coordinates': [Field(float)],
+            'instructions': Field(unicode)
         },
         'contact': {
-            'phone': unicode,
-            'email': unicode
+            'phone': Field(unicode),
+            'email': Field(unicode)
         },
-        'status': unicode,
-        'contributor': int,
-        'transfer': [int]
+        'status': Field(unicode),
+        'contributor': Field(int),
+        'transfer': [Field(int)]
     }
-    unique = ['name']
 
     def __init__(self, **kwargs):
         super(Document, self).__init__(**kwargs)
