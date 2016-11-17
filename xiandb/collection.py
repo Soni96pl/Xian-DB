@@ -88,7 +88,6 @@ class Collection(Collection):
 
     def add(self, fields):
         document = self.prepare_document(fields)
-        print document
         return self.insert_one(document).inserted_id
 
     def update(self, _id, fields):
