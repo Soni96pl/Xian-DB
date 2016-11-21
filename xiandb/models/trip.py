@@ -33,6 +33,40 @@ class TripDocument(Document):
                 'url': Field(basestring)
             },
             'conditions': Field(basestring)
+        }],
+        'lodging': [{
+            '_id': Id(counter_name='lodgingid'),
+            'city': Reference('cities', required=True),
+            'check_in': Field(datetime),
+            'check_out': Field(datetime),
+            'property': {
+              'name': Field(unicode),
+              'type': Field(int),
+              'location': {
+                  'address': Field(unicode),
+                  'coordinates': [Field(float)],
+                  'instructions': Field(unicode)
+              },
+              'contact': {
+                  'phone': Field(int),
+                  'email': Field(unicode)
+              }
+            },
+            'room': {
+                'name': Field(unicode),
+                'type': Field(int)
+            },
+            'balance': {
+                'deposit': {
+                    'value': Field(float),
+                    'currency': Field(unicode)
+                },
+                'remaining': {
+                    'value': Field(float),
+                    'currency': Field(unicode)
+                }
+            },
+            'conditions': Field(unicode)
         }]
     }
 

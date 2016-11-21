@@ -9,7 +9,7 @@ class StationDocument(Document):
         'name': Field(basestring, required=True, unique=True),
         'code': Field(basestring),
         'type': Field(basestring, required=True),
-        'city': Reference('cities'),
+        'city': Reference('cities', required=True),
         'location': {
             'address': Field(basestring),
             'coordinates': [Field(float)],
