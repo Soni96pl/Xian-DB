@@ -1,101 +1,174 @@
 from collections import OrderedDict
-from inspect import isclass
 
 from mongokat import Collection
 
-from xiandb.field import Field
+from .field import Field, process_fields
+
+
+def find_method(func):
+    def wrapped(*args, **kwargs):
+        document = func(*args, **kwargs)
+        if document:
+            document.process('select')
+        return document
+    return wrapped
+
+
+def insert_method(func):
+    def wrapped(*args, **kwargs):
+        args = list(args)
+        fields = args[0].document_class.structure
+        if func.__name__ is 'insert_one':
+            args[1] = process_fields('create', fields, args[1])
+        elif func.__name__ is 'insert_many':
+            args[1] = [process_fields('create', fields, values)
+                       for values in args[1]]
+        elif func.__name__ is 'replace_one':
+            args[2] = process_fields('create', fields, args[2])
+
+        return func(*args, **kwargs)
+    return wrapped
+
+
+def update_method(func):
+    def wrapped(*args, **kwargs):
+        args = list(args)
+        fields = args[0].document_class.structure
+        if func.__name__ is 'update':
+            args[2]['$set'] = process_fields('update', fields, args[2]['$set'])
+        if func.__name__ in ('update_one', 'update_many'):
+            if func.__name__ is 'update_one':
+                args[2]['$set'] = process_fields('update',
+                                                 fields,
+                                                 args[2]['$set'],
+                                                 add_missing=False)
+            elif func.__name__ is 'update_many':
+                args[2]['$set'] = [process_fields('update', fields, values,
+                                                  add_missing=False)
+                                   for values in args[2]['$set']]
+
+        return func(*args, **kwargs)
+    return wrapped
 
 
 class Collection(Collection):
-    def __init__(self, **kwargs):
-        super(Collection, self).__init__(**kwargs)
-        self.register_fields(self.document_class.structure.keys(),
-                             self.document_class.structure.values())
+    def __init__(self, base):
+        self.base = base
 
-    def register_fields(self, name, fields):
-        if isinstance(fields, Field):
-            fields.register(name, self)
-        elif type(fields) is list:
-            map(self.register_fields, name, fields)
-        elif type(fields) is dict:
-            map(self.register_fields, fields.keys(), fields.values())
+        self.client = base.database.client
+        self.database = base.database
+        self.collection = base.database[self.__collection__]
+
+        base.register(self.collection.name, self)
+
+    def initialize(self):
+        def initialize_fields(names, fields):
+            if isinstance(fields, Field):
+                field = fields
+                name = names
+                field.initialize(name, self)
+            elif type(fields) is list:
+                map(initialize_fields, names, fields)
+            elif type(fields) is dict:
+                map(initialize_fields, fields.keys(), fields.values())
+
+        initialize_fields(self.document_class.structure.keys(),
+                          self.document_class.structure.values())
 
     def get(self, _id):
         return self.find_one(_id)
 
-    def search(self, _id=None, fields=None, sort=[]):
+    def search(self, fields=None, sort=[], **kwargs):
         if not fields:
             fields = self.document_class.structure.keys()
 
         query = []
-        match = {}
         project = dict(zip(fields, [1 for f in fields]))
 
         query = [
             {'$project': project}
         ]
 
-        if _id is not None:
-            match = {'_id': _id}
-
-        if match:
-            query.append({'$match': match})
-        query.append({'$project': project})
-        query.append({'$sort': OrderedDict(sort)})
+        if kwargs:
+            query.append({'$match': kwargs})
+        if sort:
+            query.append({'$sort': OrderedDict(sort)})
         return self.aggregate(query)
+
+    def add(self, fields):
+        return self.insert_one(fields).inserted_id
+
+    def upsert(self, fields):
+        if '_id' not in fields:
+            return self.add(fields)
+        else:
+            self.update_one({'_id': fields['_id']}, {'$set': fields})
+            return fields['_id']
+        return False
 
     def delete(self, _id):
         if self.delete_one({'_id': _id}).deleted_count > 0:
             return True
         return False
 
-    def increment(self):
-        counter = self.__collection__ + 'id'
-        return int(self.database.system_js.getNextSequence(counter))
+    @find_method
+    def aggregate(self, *args, **kwargs):
+        return super(Collection, self).aggregate(*args, **kwargs)
 
-    def prepare_document(self, fields):
-        def break_dictionary(structure, fields):
-            items = []
+    @find_method
+    def find(self, *args, **kwargs):
+        return super(Collection, self).find(*args, **kwargs)
 
-            for name, field in structure.items():
-                if isinstance(field, Field):
-                    fields[name] = fields.get(name, None)
-                elif type(field) is dict:
-                    fields[name] = fields.get(name, {})
-                elif type(field) is list:
-                    fields[name] = fields.get(name, [])
-                else:
-                    raise ValueError("Field is of incorrect type")
+    @find_method
+    def find_one(self, *args, **kwargs):
+        return super(Collection, self).find_one(*args, **kwargs)
 
-                items.append((name, create_fields(field, fields[name])))
-            return dict(items)
+    @find_method
+    def find_by_id(self, *args, **kwargs):
+        return super(Collection, self).find_by_id(*args, **kwargs)
 
-        def break_list(structure, fields):
-            field = structure[0]
-            return [create_fields(field, value) for value in fields]
+    @find_method
+    def find_by_ids(self, *args, **kwargs):
+        return super(Collection, self).find_by_ids(*args, **kwargs)
 
-        def create_fields(structure, fields):
-            if type(structure) is dict:
-                return break_dictionary(structure, fields)
-            elif type(structure) is list:
-                return break_list(structure, fields)
+    @find_method
+    def find_one_and_delete(self, *args, **kwargs):
+        return super(Collection, self).find_one_and_delete(*args, **kwargs)
 
-            field = structure
-            value = fields
-            return field.oncreate(value)
+    @find_method
+    def find_one_and_replace(self, *args, **kwargs):
+        return super(Collection, self).find_one_and_replace(*args, **kwargs)
 
-        return create_fields(self.document_class.structure, fields)
+    @find_method
+    def find_one_and_update(self, *args, **kwargs):
+        return super(Collection, self).find_one_and_update(*args, **kwargs)
 
-    def add(self, fields):
-        document = self.prepare_document(fields)
-        return self.insert_one(document).inserted_id
+    @insert_method
+    def insert_one(self, *args, **kwargs):
+        return super(Collection, self).insert_one(*args, **kwargs)
 
-    def update(self, _id, fields):
-        return self.update_one({'_id': _id}, {"$set": fields}).acknowledged
+    @insert_method
+    def insert_many(self, *args, **kwargs):
+        return super(Collection, self).insert_many(*args, **kwargs)
 
-    def upsert(self, fields):
-        if '_id' not in fields:
-            return self.add(fields)
-        elif self.update(fields['_id'], fields):
-            return fields['_id']
-        return False
+    @insert_method
+    def replace_one(self, *args, **kwargs):
+        return super(Collection, self).replace_one(*args, **kwargs)
+
+    @update_method
+    def update(self, *args, **kwargs):
+        return super(Collection, self).update(*args, **kwargs)
+
+    @update_method
+    def update_one(self, *args, **kwargs):
+        return super(Collection, self).update_one(*args, **kwargs)
+
+    @update_method
+    def update_many(self, *args, **kwargs):
+        return super(Collection, self).update_many(*args, **kwargs)
+
+    def save(self, to_save, **kwargs):
+        to_save.process('update')
+        _id = super(Collection, self).save(to_save, **kwargs)
+        to_save.process('select')
+        return _id

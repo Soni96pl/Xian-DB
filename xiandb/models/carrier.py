@@ -1,19 +1,18 @@
-from xiandb import config
-from xiandb.field import Field, Id
-from xiandb.document import Document
-from xiandb.collection import Collection
+from ..field import Field, Id
+from ..document import Document
+from ..collection import Collection
 
 
 class CarrierDocument(Document):
     structure = {
         '_id': Id(),
-        'name': Field(unicode, required=True),
-        'type': Field(unicode),
+        'name': Field(basestring, required=True),
+        'type': Field(basestring),
         'contact': {
-            'phone': Field(unicode),
-            'email': Field(unicode)
+            'phone': Field(basestring),
+            'email': Field(basestring)
         },
-        'status': Field(unicode),
+        'status': Field(basestring),
         'contributor': Field(int)
     }
 
@@ -23,5 +22,4 @@ class CarrierDocument(Document):
 
 class CarrierCollection(Collection):
     __collection__ = 'carriers'
-    __database__ = config.mongodb['database']
     document_class = CarrierDocument

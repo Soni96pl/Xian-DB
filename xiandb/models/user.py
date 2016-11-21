@@ -1,22 +1,18 @@
 import bcrypt
 
-from xiandb import config
-from xiandb.document import Document
-from xiandb.collection import Collection
+from ..field import Field, Password, Id
+from ..document import Document
+from ..collection import Collection
 
 
 class UserDocument(Document):
     structure = {
-        '_id': int,
-        'name': unicode,
-        'password': unicode,
-        'email': unicode,
-        'favorites': [int]
+        '_id': Id(),
+        'name': Field(basestring, required=True, unique=True),
+        'password': Password(required=True),
+        'email': Field(basestring, required=True, unique=True),
+        'favorites': [Field(int)]
     }
-    preprocessors = {
-        'password': lambda p: unicode(bcrypt.hashpw(p, bcrypt.gensalt()))
-    }
-    unique = ['name', 'email']
 
     def add_favorite(self, city_id):
         if city_id not in self['favorites']:
@@ -33,7 +29,6 @@ class UserDocument(Document):
 
 class UserCollection(Collection):
     __collection__ = 'users'
-    __database__ = config.mongodb['database']
     document_class = UserDocument
 
     def authenticate(self, name, password):

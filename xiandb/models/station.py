@@ -1,36 +1,30 @@
-from xiandb import config
-from xiandb.field import Id, Field, Reference
-from xiandb.document import Document
-from xiandb.collection import Collection
-from xiandb.models import city
+from ..field import Id, Field, Reference
+from ..document import Document
+from ..collection import Collection
 
 
 class StationDocument(Document):
     structure = {
         '_id': Id(),
-        'name': Field(unicode, required=True, unique=True),
-        'code': Field(unicode),
-        'type': Field(unicode, required=True),
-        'city': Reference(city.CityCollection),
+        'name': Field(basestring, required=True, unique=True),
+        'code': Field(basestring),
+        'type': Field(basestring, required=True),
+        'city': Reference('cities'),
         'location': {
-            'address': Field(unicode),
+            'address': Field(basestring),
             'coordinates': [Field(float)],
-            'instructions': Field(unicode)
+            'instructions': Field(basestring)
         },
         'contact': {
-            'phone': Field(unicode),
-            'email': Field(unicode)
+            'phone': Field(basestring),
+            'email': Field(basestring)
         },
-        'status': Field(unicode),
+        'status': Field(basestring),
         'contributor': Field(int),
         'transfer': [Field(int)]
     }
 
-    def __init__(self, **kwargs):
-        super(Document, self).__init__(**kwargs)
-
 
 class StationCollection(Collection):
     __collection__ = 'stations'
-    __database__ = config.mongodb['database']
     document_class = StationDocument

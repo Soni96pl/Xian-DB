@@ -1,85 +1,146 @@
+import bcrypt
 from bson.dbref import DBRef
+
+import document
+
+
+def reduce_fields(fields, values):
+    ret = {}
+    for name, field in fields.items():
+        if name in values:
+            ret[name] = field
+    return ret
+
+
+def process_fields(action, fields, values, add_missing=True):
+    def break_dictionary(document, fields, values):
+        items = []
+
+        for name, field in fields.items():
+            if isinstance(field, Field):
+                values[name] = values.get(name, None)
+            elif type(field) is dict:
+                values[name] = values.get(name, {})
+            elif type(field) is list:
+                values[name] = values.get(name, [])
+            else:
+                raise ValueError("Field is of incorrect type")
+
+            items.append((name,
+                          process_field(document, field, values[name])))
+
+        return dict(items)
+
+    def break_list(document, fields, values):
+        field = fields[0]
+        return [process_field(document, field, value) for value in values]
+
+    def process_field(document, fields, values):
+        if type(fields) is dict:
+            return break_dictionary(document, fields, values)
+        elif type(fields) is list:
+            return break_list(document, fields, values)
+
+        field = fields
+        value = values
+        return getattr(field, action)(document, value)
+
+    if add_missing is False:
+        fields = reduce_fields(fields, values)
+
+    document = values
+    processed = process_field(document, fields, values)
+    return processed
 
 
 class Field(object):
-    def __init__(self, type, default=None, required=False, unique=False,
-                 oncreate=None, onupdate=None, onselect=None):
-        self.type = type
+    def __init__(self, _type, default=None, required=False, unique=False):
+        self.type = _type
         self.assert_type(default)
         self.default = default
         self.required = required
         self.unique = unique
-        self._oncreate = oncreate if oncreate else lambda s, v: v
-        self._onupdate = onupdate if onupdate else lambda s, v: v
-        self._onselect = onselect if onselect else lambda s, v: v
 
-    def register(self, name, collection):
+    def initialize(self, name, collection):
         self.name = name
+        self.base = collection.base
+        self.client = collection.client
         self.database = collection.database
         self.collection = collection
-        self.document = self.collection.document_class
+
+        if self.unique:
+            self.collection.collection.create_index(self.name, unique=True)
 
     def assert_type(self, value):
         if value is not None:
-            assert isinstance(value, self.type)
+            assert isinstance(value, self.type), \
+                "%s: %s(%s)=%s(%s) is of the wrong type!" % (
+                    self.collection, self.name, self.type, value, type(value))
 
     def assert_required(self, value):
         if self.required:
             assert value is not None, \
                 "%s: %s is required!" % (self.collection, self.name)
 
-    def assert_unique(self, value):
-        if self.unique and value is not self.default:
-            assert self.collection.find_one({self.name: value}) is None, \
-                "%s: %s is not unique!" % (self.collection, self.name)
-
     def default_value(self, value):
         if value is None:
             return self.default
         return value
 
-    def oncreate(self, value):
+    def select(self, context, value):
+        return value
+
+    def create(self, context, value):
         self.assert_type(value)
         self.assert_required(value)
         value = self.default_value(value)
-        self.assert_unique(value)
-        return self._oncreate(self, value)
+        return value
 
-    def onupdate(self, value):
-        return self._onupdate(self, value)
-
-    def onselect(self, value):
-        return self._onselect(self, value)
+    def update(self, context, value):
+        self.assert_type(value)
+        self.assert_required(value)
+        value = self.default_value(value)
+        return value
 
 
 class Id(Field):
-    def __init__(self, type=int, counter=None, oncreate=None, onupdate=None,
-                 onselect=None):
-        self.counter = counter
+    def __init__(self, _type=int, counter_name=None):
+        self.counter_name = counter_name
 
-        super(Id, self).__init__(type, None, True, True, oncreate, onupdate,
-                                 onselect)
+        super(Id, self).__init__(_type, default=None, required=True,
+                                 unique=False)
 
-    def register(self, name, collection):
-        if not self.counter:
-            self.counter = collection.__collection__ + 'id'
+    def initialize(self, name, collection):
+        if not self.counter_name:
+            self.counter_name = collection.collection.name + 'id'
+        super(Id, self).initialize(name, collection)
 
-        return super(Id, self).register(name, collection)
+    @property
+    def counter(self):
+        return int(self.database.system_js.getNextSequence(self.counter_name))
 
-    def oncreate(self, value=None):
+    def create(self, context, value):
         if value is None:
-            value = int(self.database.system_js.getNextSequence(self.counter))
+            value = self.counter
 
-        return super(Id, self).oncreate(value)
+        return super(Id, self).create(context, value)
 
 
 class Reference(Field):
-    def __init__(self, target, required=False):
-        self.target = target
-        self.target_name = target.__collection__
-        super(Reference, self).__init__(DBRef, None, required, False)
+    def __init__(self, target_name, required=False):
+        self.target_name = target_name
+        super(Reference, self).__init__(DBRef, default=None, required=required,
+                                        unique=False)
 
-    def oncreate(self, value):
+    def initialize(self, name, collection):
+        super(Reference, self).initialize(name, collection)
+        self.target = self.base.collections[self.target_name]
+
+    def select(self, context, value):
+        value = self.target.get(value.id)
+        return super(Reference, self).select(context, value)
+
+    def create(self, context, value):
         if type(value) is DBRef:
             pass
         elif type(value) is int:
@@ -89,11 +150,31 @@ class Reference(Field):
             _id = target.upsert(value)
             assert _id is not False
             value = DBRef(self.target_name, _id)
-        return super(Reference, self).oncreate(value)
+        return super(Reference, self).create(context, value)
 
-    def onupdate(self, value):
-        target = self.target(client=self.collection.client)
-        _id = target.upsert(value)
-        assert _id is not False
-        value = DBRef(self.target_name, _id)
-        return super(Reference, self).oncreate(value)
+    def update(self, context, value):
+        if type(value) is DBRef:
+            pass
+        elif type(value) is int:
+            value = DBRef(self.target_name, value)
+        elif type(value) is dict:
+            target = self.target(client=self.collection.client)
+            _id = target.upsert(value)
+            assert _id is not False
+            value = DBRef(self.target_name, _id)
+        elif isinstance(value, document.Document):
+            value.save()
+            value = DBRef(self.target_name, value['_id'])
+        return super(Reference, self).update(context, value)
+
+
+class Password(Field):
+    def __init__(self, required=False):
+        super(Password, self).__init__(unicode, default=None,
+                                       required=required, unique=False)
+
+    def encrypt(self, value):
+        return unicode(bcrypt.hashpw(value, bcrypt.gensalt()))
+
+    def create(self, context, value):
+        return super(Password, self).create(context, self.encrypt(value))

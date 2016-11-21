@@ -1,32 +1,16 @@
-from bson.dbref import DBRef
 from mongokat import Document
+
+import field
 
 
 class Document(Document):
-    def __init__(self, **kwargs):
-        super(Document, self).__init__(**kwargs)
+    def __init__(self, doc=None, mongokat_collection=None, fetched_fields=None,
+                 gen_skel=None):
+        super(Document, self).__init__(doc, mongokat_collection,
+                                       fetched_fields, gen_skel)
+
         self.database = self.mongokat_collection.database
         self.client = self.mongokat_collection.client
-
-    def as_dict(self, fields=None):
-        if not fields:
-            fields = self.structure.keys()
-
-        fields = list(set(fields))
-        document = dict(zip(fields, [self[f] for f in set(fields)]))
-
-        def dereference_level(level):
-            if isinstance(level, DBRef):
-                return self.database.dereference(level)
-            elif type(level) is dict:
-                return dict(zip(level.keys(),
-                                map(dereference_level, level.values())))
-            elif type(level) is list:
-                return map(dereference_level, level)
-            else:
-                return level
-
-        return dereference_level(document)
 
     def get_sub(self, name, _id):
         try:
@@ -56,3 +40,23 @@ class Document(Document):
 
         self[name] = filter(lambda s: s['_id'] != _id, self[name])
         return True
+
+    def save(self, force=False, uuid=False, *args, **kwargs):
+        if not self._initialized_with_doc and not force:
+            raise Exception("Cannot save a document not initialized from a \
+                             Python dict. This might remove fields from the \
+                             DB!")
+
+        return self.mongokat_collection.save(self, **kwargs)
+
+    def process(self, action, fields=None, values=None, add_missing=True):
+        if values is None:
+            values = self
+
+        if fields is None:
+            fields = self.structure
+
+        processed = field.process_fields(action, fields, values, add_missing)
+        for name, value in processed.items():
+            self[name] = value
+        return self
