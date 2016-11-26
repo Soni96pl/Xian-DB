@@ -39,7 +39,7 @@ class TripDocument(Document):
             'check_out': Field(datetime),
             'property': {
               'name': Field(unicode),
-              'type': Field(int),
+              'type': Field(unicode),
               'location': {
                   'address': Field(unicode),
                   'coordinates': [Field(float)],
@@ -52,7 +52,7 @@ class TripDocument(Document):
             },
             'room': {
                 'name': Field(unicode),
-                'type': Field(int)
+                'type': Field(unicode)
             },
             'balance': {
                 'deposit': {
