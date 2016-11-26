@@ -1,4 +1,4 @@
-from ..field import Id, Field, Reference
+from ..field import Field, Protected, Id, Reference
 from ..document import Document
 from ..collection import Collection
 
@@ -6,7 +6,8 @@ from ..collection import Collection
 class StationDocument(Document):
     structure = {
         '_id': Id(),
-        'name': Field(basestring, required=True, unique=True),
+        '_user': Protected(int),
+        'name': Field(basestring, required=True),
         'code': Field(basestring),
         'type': Field(basestring, required=True),
         'city': Reference('cities', required=True),
@@ -20,7 +21,6 @@ class StationDocument(Document):
             'email': Field(basestring)
         },
         'status': Field(basestring),
-        'contributor': Field(int),
         'transfer': [Field(int)]
     }
 

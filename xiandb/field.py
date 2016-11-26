@@ -1,18 +1,27 @@
 import bcrypt
 from bson.dbref import DBRef
 
-import document
+from . import document, tools
 
 
-def reduce_fields(fields, values):
-    ret = {}
-    for name, field in fields.items():
-        if name in values:
-            ret[name] = field
+def get_fields(fields, values, path=None, keys=None, add_missing=True):
+    fields = tools.data_get(fields, path=path, keys=keys, force=True)
+    if isinstance(fields, list):
+        fields = fields[0]
+
+    if add_missing is False and isinstance(fields, dict):
+        ret = {}
+        for name, field in fields.items():
+            if name in values:
+                ret[name] = field
+    else:
+        ret = fields
+
     return ret
 
 
-def process_fields(action, fields, values, add_missing=True):
+def process_fields(action, fields, values, document=None, path=None,
+                   add_missing=True):
     def break_dictionary(document, fields, values):
         items = []
 
@@ -45,10 +54,12 @@ def process_fields(action, fields, values, add_missing=True):
         value = values
         return getattr(field, action)(document, value)
 
-    if add_missing is False:
-        fields = reduce_fields(fields, values)
+    keys = tools.path_to_keys(path)
+    fields = get_fields(fields, values, keys=keys, add_missing=add_missing)
 
-    document = values
+    if document is None:
+        document = values
+
     processed = process_field(document, fields, values)
     return processed
 
@@ -103,6 +114,12 @@ class Field(object):
         return value
 
 
+class Protected(Field):
+    def __init__(self, _type):
+        super(Protected, self).__init__(_type, default=None, required=True,
+                                        unique=False)
+
+
 class Id(Field):
     def __init__(self, _type=int, counter_name=None):
         self.counter_name = counter_name
@@ -125,6 +142,12 @@ class Id(Field):
 
         return super(Id, self).create(context, value)
 
+    def update(self, context, value):
+        if value is None:
+            value = self.counter
+
+        return super(Id, self).create(context, value)
+
 
 class Reference(Field):
     def __init__(self, target_name, required=False):
@@ -137,34 +160,44 @@ class Reference(Field):
         self.target = self.base.collections[self.target_name]
 
     def select(self, context, value):
+        if value is None:
+            return None
+
         value = self.target.get(value.id)
         return super(Reference, self).select(context, value)
 
     def create(self, context, value):
-        if type(value) is DBRef:
+        if value is None:
+            return None
+        elif isinstance(value, DBRef):
             pass
-        elif type(value) is int:
+        elif isinstance(value, int):
             value = DBRef(self.target_name, value)
-        elif type(value) is dict:
-            target = self.target(client=self.collection.client)
-            _id = target.upsert(value)
+        elif isinstance(value, document.Document):
+            value.save()
+            value = DBRef(self.target_name, value['_id'])
+        elif isinstance(value, dict):
+            _id = self.target.upsert(value,
+                                     _id=value.get('_id', None),
+                                     _user=context.get('_user', None))
             assert _id is not False
             value = DBRef(self.target_name, _id)
         return super(Reference, self).create(context, value)
 
     def update(self, context, value):
-        if type(value) is DBRef:
+        if isinstance(value, DBRef):
             pass
-        elif type(value) is int:
+        elif isinstance(value, int):
             value = DBRef(self.target_name, value)
-        elif type(value) is dict:
-            target = self.target(client=self.collection.client)
-            _id = target.upsert(value)
-            assert _id is not False
-            value = DBRef(self.target_name, _id)
         elif isinstance(value, document.Document):
             value.save()
             value = DBRef(self.target_name, value['_id'])
+        elif isinstance(value, dict):
+            _id = self.target.upsert(value,
+                                     _id=value.get('_id', None),
+                                     _user=context.get('_user', None))
+            assert _id is not False
+            value = DBRef(self.target_name, _id)
         return super(Reference, self).update(context, value)
 
 
@@ -174,7 +207,7 @@ class Password(Field):
                                        required=required, unique=False)
 
     def encrypt(self, value):
-        return unicode(bcrypt.hashpw(value, bcrypt.gensalt()))
+        return unicode(bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt()))
 
     def create(self, context, value):
         return super(Password, self).create(context, self.encrypt(value))

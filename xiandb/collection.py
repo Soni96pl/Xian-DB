@@ -1,23 +1,31 @@
 from collections import OrderedDict
 
+from pymongo.command_cursor import CommandCursor
 from mongokat import Collection
 
+from . import tools
+from .document import Document
 from .field import Field, process_fields
 
 
 def find_method(func):
     def wrapped(*args, **kwargs):
-        document = func(*args, **kwargs)
-        if document:
-            document.process('select')
-        return document
+        fields = args[0].structure
+        ret = func(*args, **kwargs)
+        if isinstance(ret, Document):
+            ret.process('select')
+        elif isinstance(ret, CommandCursor):
+            ret = list(ret)
+            for document in ret:
+                process_fields('select', fields, document, add_missing=False)
+        return ret
     return wrapped
 
 
 def insert_method(func):
     def wrapped(*args, **kwargs):
         args = list(args)
-        fields = args[0].document_class.structure
+        fields = args[0].structure
         if func.__name__ is 'insert_one':
             args[1] = process_fields('create', fields, args[1])
         elif func.__name__ is 'insert_many':
@@ -33,7 +41,7 @@ def insert_method(func):
 def update_method(func):
     def wrapped(*args, **kwargs):
         args = list(args)
-        fields = args[0].document_class.structure
+        fields = args[0].structure
         if func.__name__ is 'update':
             args[2]['$set'] = process_fields('update', fields, args[2]['$set'])
         if func.__name__ in ('update_one', 'update_many'):
@@ -72,44 +80,84 @@ class Collection(Collection):
             elif type(fields) is dict:
                 map(initialize_fields, fields.keys(), fields.values())
 
-        initialize_fields(self.document_class.structure.keys(),
-                          self.document_class.structure.values())
+        initialize_fields(self.structure.keys(),
+                          self.structure.values())
 
-    def get(self, _id):
-        return self.find_one(_id)
+    @property
+    def structure(self):
+        return self.document_class.structure
 
-    def search(self, fields=None, sort=[], **kwargs):
-        if not fields:
-            fields = self.document_class.structure.keys()
+    def match(self, _id=None, _user=None, **match):
+        if _id:
+            match['_id'] = _id
+        if _user:
+            match['_user'] = _user
+        return match
+
+    def get(self, _id, _user=None):
+        match = self.match(_id, _user)
+        return self.find_one(match)
+
+    def search(self, fields=None, sort=None, path=None, _id=None, _user=None,
+               **match):
+        if fields is None:
+            fields = self.structure.keys()
+        if sort is None:
+            sort = []
 
         query = []
+        match = self.match(_id, _user, **match)
         project = dict(zip(fields, [1 for f in fields]))
 
-        query = [
-            {'$project': project}
-        ]
-
-        if kwargs:
-            query.append({'$match': kwargs})
+        if match:
+            query.append({'$match': match})
+        if project:
+            query.append({'$project': project})
         if sort:
             query.append({'$sort': OrderedDict(sort)})
-        return self.aggregate(query)
 
-    def add(self, fields):
-        return self.insert_one(fields).inserted_id
+        ret = self.aggregate(query)
+        if _id is not None and isinstance(_id, int):
+            ret = ret[0]
+        return tools.data_get(ret, path)
 
-    def upsert(self, fields):
-        if '_id' not in fields:
-            return self.add(fields)
+    def add(self, data, _user=None):
+        if _user:
+            data['_user'] = _user
+        return self.insert_one(data).inserted_id
+
+    def patch(self, data, _id, _user=None, path=None):
+        match = self.match(_id, _user)
+        if path is None:
+            if self.update_one(match, {"$set": data}).modified_count == 0:
+                return False
         else:
-            self.update_one({'_id': fields['_id']}, {'$set': fields})
-            return fields['_id']
-        return False
+            document = self.find_one(match)
+            if document is None:
+                return False
 
-    def delete(self, _id):
-        if self.delete_one({'_id': _id}).deleted_count > 0:
-            return True
-        return False
+            document.update_partial(data, path=path)
+            document.save()
+        return _id
+
+    def upsert(self, data, _id=None, _user=None, path=None):
+        if _id is None:
+            return self.add(data, _user)
+        return self.patch(data, _id, _user, path)
+
+    def delete(self, _id, _user=None, path=None):
+        match = self.match(_id, _user)
+        if path is None:
+            if self.delete_one(match).deleted_count == 0:
+                return False
+        else:
+            document = self.find_one(match)
+            if document is None:
+                return False
+
+            document.delete_partial(path=path)
+            document.save()
+        return True
 
     @find_method
     def aggregate(self, *args, **kwargs):

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from ..field import Id, Reference, Field
+from ..field import Field, Protected, Id, Reference
 from ..document import Document
 from ..collection import Collection
 
@@ -8,11 +8,10 @@ from ..collection import Collection
 class TripDocument(Document):
     structure = {
         '_id': Id(),
-        'user_id': Field(int, required=True),
+        '_user': Protected(int),
         'name': Field(basestring, required=True),
         'date': Field(date, required=True),
         'transport': [{
-            '_id': Id(counter_name='transportid'),
             'carrier': Reference('carriers'),
             'code': Field(basestring),
             'mode': Field(basestring),
@@ -35,7 +34,6 @@ class TripDocument(Document):
             'conditions': Field(basestring)
         }],
         'lodging': [{
-            '_id': Id(counter_name='lodgingid'),
             'city': Reference('cities', required=True),
             'check_in': Field(datetime),
             'check_out': Field(datetime),
