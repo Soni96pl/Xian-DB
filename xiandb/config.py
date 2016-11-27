@@ -8,5 +8,6 @@ try:
 except IOError:
     print "Couldn't find a valid configuration file in ~/xian/config.yml"
     print "Please refer to README.rst"
+    raise
 
 mongodb = cfg['mongodb']
