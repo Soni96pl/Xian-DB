@@ -16,5 +16,5 @@ The database package is dependent on MongoKat.
 How can I configure it?
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-You can configure the database connection in the ``~/xian/config.rst``
+You can configure the database connection in the ``~/xian/config.yml``
 You can find an example in https://github.com/Kuba77/Xian-S/blob/master/config.yml
